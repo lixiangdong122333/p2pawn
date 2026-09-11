@@ -150,6 +150,16 @@ P2PAWN_NAME=Bob ./target/release/examples/lan_pair client Bob
 `P2PAWN_NAME` 同样作用于主程序 `p2pawn`，可以在不改配置的情况下覆盖
 玩家名 —— 单机跑多个实例时非常实用。
 
+## 贡献
+
+欢迎提交 PR！`main` 只接受 squash 合并的 Pull Request，PR 标题遵循
+[Conventional Commits](https://www.conventionalcommits.org) 规范 ——
+标题前缀（`feat:`/`fix:` 等）决定自动版本号变化。CI 会检查格式化、
+clippy、测试和依赖许可证。
+
+完整指南见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)
+（[English](CONTRIBUTING.md)）。
+
 ## 许可证
 
 Copyright 2026 Xiangdong Li
