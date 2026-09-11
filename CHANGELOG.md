@@ -11,6 +11,7 @@ features bump minor, fixes bump patch.
 - Release workflow silently skipped (git-cliff not on PATH, bad grep) (#2) (9854d2b)
 - Trigger release retry after bypass rule update (47b9b94)
 - Allow concurrent asset uploads to overwrite (--clobber) (#3) (22b922a)
+- Release pipeline re-trigger loop and draft-tag chicken-and-egg (#4) (eded5f9)
 ### CI
 
 - Branch-protection workflow + automated release pipeline (#1) (4456d1b)
