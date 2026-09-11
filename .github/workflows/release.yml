@@ -1,7 +1,7 @@
 # Release: when a PR is squash-merged into main, derive the next version from
 # the merge commit's conventional-commit type, update Cargo.toml/CHANGELOG,
-# create the tag server-side, build all three platforms, and publish the
-# GitHub Release -- all in one run (no nested-workflow triggering involved).
+# tag, build all three platforms, and publish the GitHub Release -- all in
+# one run (no nested-workflow triggering involved).
 
 name: release
 
@@ -33,8 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           # Install the prebuilt binary to /usr/local/bin so every later step
-          # in this job can call it (the orhun action only exposes it inside
-          # its own composite steps). Note: the release asset name omits the
+          # in this job can call it. Note: the release asset name omits the
           # "v" prefix of the tag.
           curl -fsSL "https://github.com/orhun/git-cliff/releases/download/${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION#v}-x86_64-unknown-linux-gnu.tar.gz" \
             | tar xz --strip-components=1
@@ -43,17 +42,33 @@ jobs:
 
       - name: Compute next version
         id: versions
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           set -euo pipefail
-          # Last tag, or 0.0.0 if none exists yet.
-          LAST_TAG="$(git tag --sort=-v:refname | head -1 || true)"
-          LAST="${LAST_TAG#v}"
+          # Last released version: prefer GitHub Releases (drafts included),
+          # because lightweight tags only materialize when a release is
+          # published. Fall back to git tags, then 0.0.0.
+          LAST="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
+            | sed -n 's/^.*\tv\([0-9][0-9.]*\)\t.*$/\1/p' | sort -V | tail -1 || true)"
+          if [ -z "$LAST" ]; then
+            LAST_TAG="$(git tag --sort=-v:refname | head -1 || true)"
+            LAST="${LAST_TAG#v}"
+          fi
           [ -n "$LAST" ] || LAST=0.0.0
 
           # The head commit is the squash-merge; its subject carries the PR's
           # conventional-commit title, e.g. "feat: add replay (#12)".
           SUBJECT="$(git log -1 --pretty=%s)"
           echo "merge commit subject: $SUBJECT"
+
+          # Skip our own release commits so they never re-trigger a release.
+          case "$SUBJECT" in
+            "chore(release):"*) 
+              echo "Release commit, skipping."
+              echo "released=false" >> "$GITHUB_OUTPUT"
+              exit 0 ;;
+          esac
 
           # Breaking marker: a "!" before the ":" in the type part, or a
           # "BREAKING CHANGE:" footer in the body.
@@ -84,7 +99,7 @@ jobs:
           VERSION="$MAJOR.$MINOR.$PATCH"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "released=true" >> "$GITHUB_OUTPUT"
-          echo "Next version: v$VERSION (bump=$BUMP, from: $SUBJECT)"
+          echo "Next version: v$VERSION (bump=$BUMP, from: $SUBJECT, last: v$LAST)"
 
       - name: Update version in Cargo.toml / Cargo.lock
         if: steps.versions.outputs.released == 'true'
@@ -107,22 +122,23 @@ jobs:
           git commit -m "chore(release): v$VERSION"
           git push
 
-      - name: Create GitHub Release (tag on the merge commit)
+      - name: Create GitHub Release (published, tag on the release commit)
         if: steps.versions.outputs.released == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
           VERSION: ${{ steps.versions.outputs.version }}
-          TARGET: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # Release notes: the changelog section generated for this version.
+          # Tag the release commit we just pushed (HEAD), so the tag and the
+          # version bump live together. Release is published immediately;
+          # assets are attached by the build jobs below.
           NOTES="$(git-cliff --config cliff.toml --tag "v$VERSION" --strip header)"
           gh release create "v$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$TARGET" \
+            --target "$(git rev-parse HEAD)" \
             --title "v$VERSION" \
             --notes "$NOTES" \
-            --draft
+            --latest
 
   build:
     needs: release
@@ -178,14 +194,3 @@ jobs:
         # Matrix jobs upload concurrently; --clobber lets a retry overwrite
         # an asset that another job (or a previous attempt) already created.
         run: gh release upload "v$VERSION" "${{ matrix.artifact }}" "${{ matrix.artifact }}.sha256" --clobber --repo "$GITHUB_REPOSITORY"
-
-  publish:
-    needs: [release, build]
-    if: needs.release.outputs.released == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mark the draft release as published
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-          VERSION: ${{ needs.release.outputs.version }}
-        run: gh release edit "v$VERSION" --draft=false --latest --repo "$GITHUB_REPOSITORY"
