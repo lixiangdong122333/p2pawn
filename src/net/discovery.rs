@@ -56,7 +56,16 @@ fn make_discovery_socket() -> io::Result<UdpSocket> {
     // Allow several instances on one machine (e.g. testing) to share the port;
     // broadcast datagrams are delivered to all bound sockets.
     sock.set_reuse_address(true)?;
-    #[cfg(unix)]
+    // SO_REUSEPORT (unix only) lets multiple instances on one host bind the
+    // beacon port; requires socket2's "all" feature. Not available on Windows.
+    #[cfg(all(
+        unix,
+        not(target_os = "solaris"),
+        not(target_os = "illumos"),
+        not(target_os = "cygwin"),
+        not(target_os = "nuttx"),
+        not(target_os = "wasi")
+    ))]
     sock.set_reuse_port(true)?;
     sock.set_broadcast(true)?;
     // Must bind the well-known beacon port to receive broadcasts addressed to

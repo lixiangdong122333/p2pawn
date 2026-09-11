@@ -2,3 +2,4 @@
 /dist
 Cargo.toml.orig
 *.exe
+dialog_crop.png
