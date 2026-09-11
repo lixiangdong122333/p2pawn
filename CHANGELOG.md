@@ -5,6 +5,10 @@ Versions follow the [0.x convention] of cargo: breaking changes bump minor,
 features bump minor, fixes bump patch.
 
 [0.x convention]: https://doc.rust-lang.org/cargo/reference/manifest.html#the-version-field
+## [0.0.4] - 2026-09-11
+### Documentation
+
+- Correct maintenance-PR release behavior in contributing guide (#7) (c3a804f)
 ## [0.0.3] - 2026-09-11
 ### Documentation
 
