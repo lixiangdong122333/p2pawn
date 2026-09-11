@@ -14,6 +14,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  GIT_CLIFF_VERSION: v2.14.1
 
 jobs:
   release:
@@ -29,13 +30,16 @@ jobs:
           token: ${{ secrets.RELEASE_BOT_TOKEN }}
 
       - name: Install git-cliff
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --verbose
-        env:
-          OUTPUT: CHANGELOG.md
-          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Install the prebuilt binary to /usr/local/bin so every later step
+          # in this job can call it (the orhun action only exposes it inside
+          # its own composite steps). Note: the release asset name omits the
+          # "v" prefix of the tag.
+          curl -fsSL "https://github.com/orhun/git-cliff/releases/download/${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION#v}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz --strip-components=1
+          sudo mv git-cliff /usr/local/bin/
+          git-cliff --version
 
       - name: Compute next version
         id: versions
@@ -49,16 +53,17 @@ jobs:
           # The head commit is the squash-merge; its subject carries the PR's
           # conventional-commit title, e.g. "feat: add replay (#12)".
           SUBJECT="$(git log -1 --pretty=%s)"
+          echo "merge commit subject: $SUBJECT"
 
-          # Breaking marker: "feat!:" anywhere in the type part, or a
+          # Breaking marker: a "!" before the ":" in the type part, or a
           # "BREAKING CHANGE:" footer in the body.
-          if echo "$SUBJECT" | grep -qE '^[a-z]+([^)]*\)!?:'; then
+          if echo "$SUBJECT" | grep -Eq '^[a-z]+(\([^)]*\))?!:'; then
             BUMP=minor   # breaking on 0.x bumps minor
           elif git log -1 --pretty=%B | grep -q '^BREAKING CHANGE:'; then
             BUMP=minor
-          elif echo "$SUBJECT" | grep -qE '^feat([(:]|$)'; then
+          elif echo "$SUBJECT" | grep -Eq '^feat([(:]|$)'; then
             BUMP=minor
-          elif echo "$SUBJECT" | grep -qE '^fix([(:]|$)'; then
+          elif echo "$SUBJECT" | grep -Eq '^fix([(:]|$)'; then
             BUMP=patch
           elif git-cliff --config cliff.toml --unreleased --strip all | grep -q '[^[:space:]]'; then
             # chore/docs/etc with a non-empty changelog body: still worth a
@@ -84,21 +89,22 @@ jobs:
       - name: Update version in Cargo.toml / Cargo.lock
         if: steps.versions.outputs.released == 'true'
         run: |
+          set -euo pipefail
           VERSION="${{ steps.versions.outputs.version }}"
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
           cargo update --workspace --offline 2>/dev/null || true
           # Generate the changelog for this release into CHANGELOG.md.
-          git-cliff --config cliff.toml --tag "v$VERSION" > /tmp/changelog.md
-          cp /tmp/changelog.md CHANGELOG.md
+          git-cliff --config cliff.toml --tag "v$VERSION" > CHANGELOG.md
 
       - name: Commit release files
         if: steps.versions.outputs.released == 'true'
         run: |
+          set -euo pipefail
           VERSION="${{ steps.versions.outputs.version }}"
           git config user.name "p2pawn-release-bot"
           git config user.email "13478917542@163.com"
           git add Cargo.toml Cargo.lock CHANGELOG.md
-          git commit -m "chore(release): v$VERSION" || exit 1
+          git commit -m "chore(release): v$VERSION"
           git push
 
       - name: Create GitHub Release (tag on the merge commit)
@@ -108,8 +114,9 @@ jobs:
           VERSION: ${{ steps.versions.outputs.version }}
           TARGET: ${{ github.sha }}
         run: |
+          set -euo pipefail
           # Release notes: the changelog section generated for this version.
-          NOTES="$(git-cliff --config cliff.toml --tag "v$VERSION" --strip header | sed '/^$/d;1!b')"
+          NOTES="$(git-cliff --config cliff.toml --tag "v$VERSION" --strip header)"
           gh release create "v$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$TARGET" \
@@ -148,6 +155,7 @@ jobs:
       - name: Package
         shell: bash
         run: |
+          set -euo pipefail
           VERSION="${{ needs.release.outputs.version }}"
           SRC="target/${{ matrix.target }}/release/p2pawn"
           [ -f "$SRC.exe" ] && SRC="$SRC.exe"
