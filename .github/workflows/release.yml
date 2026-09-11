@@ -175,7 +175,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
           VERSION: ${{ needs.release.outputs.version }}
-        run: gh release upload "v$VERSION" "${{ matrix.artifact }}" "${{ matrix.artifact }}.sha256" --repo "$GITHUB_REPOSITORY"
+        # Matrix jobs upload concurrently; --clobber lets a retry overwrite
+        # an asset that another job (or a previous attempt) already created.
+        run: gh release upload "v$VERSION" "${{ matrix.artifact }}" "${{ matrix.artifact }}.sha256" --clobber --repo "$GITHUB_REPOSITORY"
 
   publish:
     needs: [release, build]
