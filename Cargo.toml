@@ -1,0 +1,28 @@
+[package]
+name = "p2pawn"
+version = "0.1.0"
+edition = "2024"
+description = "Peer-to-peer chess in your terminal — no server, no account, just you and a colleague on the LAN."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/lixiangdong122333/p2pawn"
+exclude = ["dist"]
+
+[lib]
+name = "p2pawn"
+path = "src/lib.rs"
+
+[[bin]]
+name = "p2pawn"
+path = "src/main.rs"
+
+[dependencies]
+chess = "3.2.0"
+crossterm = "0.29.0"
+dirs = "7.0.0"
+if-addrs = "0.15.0"
+ratatui = "0.30.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+socket2 = "0.6.5"
+toml = "1.1.5"

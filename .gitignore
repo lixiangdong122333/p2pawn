@@ -1,0 +1,4 @@
+/target
+/dist
+Cargo.toml.orig
+*.exe
