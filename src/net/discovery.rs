@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use if_addrs::get_if_addrs;
 
 use super::proto::{
-    Beacon, PeerStatus, BEACON_INTERVAL_MS, BEACON_PORT, PEER_TIMEOUT_MS, PROTO_VERSION,
+    BEACON_INTERVAL_MS, BEACON_PORT, Beacon, PEER_TIMEOUT_MS, PROTO_VERSION, PeerStatus,
 };
 
 /// A peer visible on the LAN.
@@ -56,7 +56,16 @@ fn make_discovery_socket() -> io::Result<UdpSocket> {
     // Allow several instances on one machine (e.g. testing) to share the port;
     // broadcast datagrams are delivered to all bound sockets.
     sock.set_reuse_address(true)?;
-    #[cfg(unix)]
+    // SO_REUSEPORT (unix only) lets multiple instances on one host bind the
+    // beacon port; requires socket2's "all" feature. Not available on Windows.
+    #[cfg(all(
+        unix,
+        not(target_os = "solaris"),
+        not(target_os = "illumos"),
+        not(target_os = "cygwin"),
+        not(target_os = "nuttx"),
+        not(target_os = "wasi")
+    ))]
     sock.set_reuse_port(true)?;
     sock.set_broadcast(true)?;
     // Must bind the well-known beacon port to receive broadcasts addressed to
@@ -160,10 +169,9 @@ impl Discovery {
             guard.retain(|_, p| p.last_seen.elapsed().as_millis() as u64 <= PEER_TIMEOUT_MS);
             guard.values().cloned().collect()
         };
-        peers.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        peers.sort_by_key(|a| a.name.to_lowercase());
         peers
     }
-
 }
 
 fn new_instance_id() -> u64 {
@@ -249,11 +257,7 @@ fn listen_loop(socket: Arc<UdpSocket>, shared: Arc<Shared>) {
                         tcp_addr: SocketAddr::V4(SocketAddrV4::new(ip, beacon.tcp_port)),
                         last_seen: Instant::now(),
                     };
-                    shared
-                        .peers
-                        .lock()
-                        .unwrap()
-                        .insert(beacon.id.clone(), peer);
+                    shared.peers.lock().unwrap().insert(beacon.id.clone(), peer);
                 }
             }
             // Read-timeout expiry: keep looping (WouldBlock on Unix,
@@ -264,7 +268,7 @@ fn listen_loop(socket: Arc<UdpSocket>, shared: Arc<Shared>) {
                     io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
                 ) =>
             {
-                continue
+                continue;
             }
             // Transient errors: back off briefly rather than dying.
             Err(_) => std::thread::sleep(Duration::from_millis(200)),

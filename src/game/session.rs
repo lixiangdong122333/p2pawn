@@ -184,7 +184,8 @@ impl Session {
         let mv = san::uci_to_move(self.board(), uci)?;
         let mover = self.game.side_to_move();
         let record = self.apply_move(mv);
-        self.clock.set_remaining(mover, Duration::from_millis(clock_ms));
+        self.clock
+            .set_remaining(mover, Duration::from_millis(clock_ms));
         Some(record)
     }
 
@@ -322,12 +323,18 @@ mod tests {
 
     #[test]
     fn full_short_game_mate() {
-        let mut s =
-            Session::new("W".into(), "B".into(), Some(Color::White), TimeControl::BASE_5_0);
+        let mut s = Session::new(
+            "W".into(),
+            "B".into(),
+            Some(Color::White),
+            TimeControl::BASE_5_0,
+        );
         // Fool's mate: f3 e5 g4 Qh4#
         let seq = [("f2", "f3"), ("e7", "e5"), ("g2", "g4"), ("d8", "h4")];
         for (from, to) in seq {
-            let rec = s.try_move(parse_sq(from), parse_sq(to), None).expect("legal move");
+            let rec = s
+                .try_move(parse_sq(from), parse_sq(to), None)
+                .expect("legal move");
             assert!(!rec.san.is_empty());
         }
         assert!(s.is_over());
@@ -339,8 +346,12 @@ mod tests {
 
     #[test]
     fn remote_uci_and_clock_sync() {
-        let mut s =
-            Session::new("W".into(), "B".into(), Some(Color::White), TimeControl::BASE_3_2);
+        let mut s = Session::new(
+            "W".into(),
+            "B".into(),
+            Some(Color::White),
+            TimeControl::BASE_3_2,
+        );
         // White moves locally first (it is white's turn), then black's move
         // arrives from the network.
         s.try_move(parse_sq("e2"), parse_sq("e4"), None).unwrap();
@@ -348,7 +359,10 @@ mod tests {
         assert_eq!(rec.san, "e5");
         assert_eq!(s.side_to_move(), Color::White);
         // Black's clock was overwritten with the reported time.
-        assert_eq!(s.clock.remaining(Color::Black), Duration::from_millis(299_000));
+        assert_eq!(
+            s.clock.remaining(Color::Black),
+            Duration::from_millis(299_000)
+        );
         assert!(s.apply_remote_uci("e2e5", 0).is_none()); // illegal
     }
 
@@ -391,7 +405,12 @@ mod tests {
 
     #[test]
     fn resignation_and_timeout() {
-        let mut s = Session::new("W".into(), "B".into(), Some(Color::White), TimeControl::BASE_1_0);
+        let mut s = Session::new(
+            "W".into(),
+            "B".into(),
+            Some(Color::White),
+            TimeControl::BASE_1_0,
+        );
         s.resign(Color::Black);
         assert_eq!(s.result_string(), "1-0");
         let mut s2 = Session::new("W".into(), "B".into(), None, TimeControl::BASE_1_0);
@@ -427,4 +446,3 @@ mod tests {
         assert_eq!(rec.uci, "a7b8q");
     }
 }
-

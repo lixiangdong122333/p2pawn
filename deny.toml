@@ -1,0 +1,30 @@
+# cargo-deny configuration: keep the dependency tree permissively licensed.
+# `cargo deny check licenses` runs in CI on every PR.
+#
+# The allow list uses single SPDX identifiers: a crate dual-licensed
+# "MIT OR Apache-2.0" is satisfied by either branch, so listing the
+# individual ids covers every combination we accept. SPDX compound
+# expressions (OR/AND/WITH) are not valid entries here.
+
+[licenses]
+version = 2
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Zlib",
+  "MPL-2.0",
+  "Unlicense",
+  "0BSD",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Unicode-3.0",
+  "BSL-1.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+
+[advisories]
+version = 2
+yanked = "warn"

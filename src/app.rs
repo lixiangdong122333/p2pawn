@@ -35,11 +35,7 @@ pub enum ColorChoice {
 }
 
 impl ColorChoice {
-    pub const ALL: [ColorChoice; 3] = [
-        ColorChoice::White,
-        ColorChoice::Black,
-        ColorChoice::Random,
-    ];
+    pub const ALL: [ColorChoice; 3] = [ColorChoice::White, ColorChoice::Black, ColorChoice::Random];
     pub fn label(self) -> &'static str {
         match self {
             ColorChoice::White => "White",
@@ -52,7 +48,11 @@ impl ColorChoice {
 /// Modal dialog rendered on top of the current screen.
 pub enum Modal {
     /// Promotion piece picker.
-    Promotion { from: Square, to: Square, sel: usize },
+    Promotion {
+        from: Square,
+        to: Square,
+        sel: usize,
+    },
     /// In-game menu (Esc).
     GameMenu { sel: usize },
     /// Game over summary.
@@ -203,7 +203,10 @@ impl App {
     pub fn move_cursor(&mut self, df: i32, dr: i32) {
         let flip = self.view_flipped();
         // Visual deltas to board deltas.
-        let (bf, br) = (df * if flip { -1 } else { 1 }, dr * if flip { -1 } else { 1 });
+        let (bf, br) = (
+            df * if flip { -1 } else { 1 },
+            dr * if flip { -1 } else { 1 },
+        );
         if let Some(sq) = self.cursor {
             let f = sq.get_file().to_index() as i32 + bf;
             let r = sq.get_rank().to_index() as i32 + br;
@@ -225,11 +228,9 @@ impl App {
     }
 
     pub fn last_move_squares(&self) -> Option<(Square, Square)> {
-        self.session.as_ref().and_then(|s| {
-            s.moves
-                .last()
-                .and_then(|m| parse_uci_squares(&m.uci))
-        })
+        self.session
+            .as_ref()
+            .and_then(|s| s.moves.last().and_then(|m| parse_uci_squares(&m.uci)))
     }
 
     /// Square of the king that is currently in check, if any.
@@ -283,7 +284,16 @@ impl App {
                 tc_inc: tc.increment.as_secs() as u32,
             });
         }
-        let mut s = Session::new(white_name, black_name, Some(if you_white { Color::White } else { Color::Black }), tc);
+        let mut s = Session::new(
+            white_name,
+            black_name,
+            Some(if you_white {
+                Color::White
+            } else {
+                Color::Black
+            }),
+            tc,
+        );
         s.clock.start(Color::White);
         self.session = Some(s);
         self.started_iso = now_iso();
@@ -296,11 +306,21 @@ impl App {
     }
 
     /// Start a LAN game as the invited side (we just got Start).
-    fn start_lan_game_guest(&mut self, white_name: String, black_name: String, you_white: bool, tc: TimeControl) {
+    fn start_lan_game_guest(
+        &mut self,
+        white_name: String,
+        black_name: String,
+        you_white: bool,
+        tc: TimeControl,
+    ) {
         let mut s = Session::new(
             white_name,
             black_name,
-            Some(if you_white { Color::White } else { Color::Black }),
+            Some(if you_white {
+                Color::White
+            } else {
+                Color::Black
+            }),
             tc,
         );
         s.clock.start(Color::White);
@@ -317,7 +337,9 @@ impl App {
     /// Send our move to the opponent, with our remaining clock time.
     fn send_move(&mut self, uci: &str) {
         let mover = self.session.as_ref().map(|s| !s.side_to_move());
-        if let (Some(conn), Some(mover), Some(s)) = (self.conn.as_mut(), mover, self.session.as_ref()) {
+        if let (Some(conn), Some(mover), Some(s)) =
+            (self.conn.as_mut(), mover, self.session.as_ref())
+        {
             conn.send(&GameMsg::Move {
                 uci: uci.to_string(),
                 clock_ms: s.clock.remaining(mover).as_millis() as u64,
@@ -327,7 +349,9 @@ impl App {
 
     /// Apply the cursor move (Enter on a target square).
     pub fn attempt_move(&mut self, to: Square) {
-        let Some(sess) = self.session.as_mut() else { return };
+        let Some(sess) = self.session.as_mut() else {
+            return;
+        };
         let Some(from) = self.selected else { return };
         if sess.is_over() || !sess.is_my_turn() {
             return;
@@ -347,8 +371,12 @@ impl App {
     }
 
     pub fn attempt_promotion(&mut self, piece: Piece) {
-        let Some(Modal::Promotion { from, to, .. }) = self.modal.take() else { return };
-        let Some(sess) = self.session.as_mut() else { return };
+        let Some(Modal::Promotion { from, to, .. }) = self.modal.take() else {
+            return;
+        };
+        let Some(sess) = self.session.as_mut() else {
+            return;
+        };
         if let Some(rec) = sess.try_move(from, to, Some(piece)) {
             self.selected = None;
             self.send_move(&rec.uci);
@@ -367,10 +395,10 @@ impl App {
     fn maybe_open_draw_modal(&mut self) {
         let offered = self.session.as_ref().and_then(|s| s.draw_offered_by);
         let my = self.session.as_ref().and_then(|s| s.my_color);
-        if let (Some(by), Some(me)) = (offered, my) {
-            if by != me {
-                self.modal = Some(Modal::DrawIncoming);
-            }
+        if let (Some(by), Some(me)) = (offered, my)
+            && by != me
+        {
+            self.modal = Some(Modal::DrawIncoming);
         }
     }
 
@@ -395,15 +423,14 @@ impl App {
 
     /// Leave the game screen; resigning if it is still running.
     pub fn leave_game(&mut self, resign: bool) {
-        if let Some(sess) = self.session.as_mut() {
-            if resign && !sess.is_over() {
-                let me = sess.my_color;
-                if let Some(me) = me {
-                    sess.resign(me);
-                    if let Some(conn) = self.conn.as_mut() {
-                        conn.send(&GameMsg::Resign);
-                    }
-                }
+        if let Some(sess) = self.session.as_mut()
+            && resign
+            && !sess.is_over()
+            && let Some(me) = sess.my_color
+        {
+            sess.resign(me);
+            if let Some(conn) = self.conn.as_mut() {
+                conn.send(&GameMsg::Resign);
             }
         }
         if let Some(conn) = self.conn.as_mut() {
@@ -440,10 +467,10 @@ impl App {
             if let Some(flagged) = sess.clock.flagged() {
                 let mine = sess.my_color == Some(flagged);
                 sess.timeout(flagged);
-                if mine {
-                    if let Some(conn) = self.conn.as_mut() {
-                        conn.send(&GameMsg::Timeout);
-                    }
+                if let Some(conn) = self.conn.as_mut()
+                    && mine
+                {
+                    conn.send(&GameMsg::Timeout);
                 }
                 self.finalize_if_over();
             }
@@ -490,11 +517,11 @@ impl App {
                 let mut conn = conn;
                 conn.close();
             }
-            if let Some(sess) = self.session.as_mut() {
-                if !sess.is_over() {
-                    let me = sess.my_color.unwrap_or(Color::White);
-                    sess.abandoned(me);
-                }
+            if let Some(sess) = self.session.as_mut()
+                && !sess.is_over()
+            {
+                let me = sess.my_color.unwrap_or(Color::White);
+                sess.abandoned(me);
             }
             self.finalize_if_over();
         } else {
@@ -504,24 +531,26 @@ impl App {
             }
             self.pending_conn = None;
             self.conn = None;
-            match self.screen {
-                Screen::Lobby => {
-                    self.lobby_status = format!("connection failed: {why}");
-                }
-                _ => {}
+            if self.screen == Screen::Lobby {
+                self.lobby_status = format!("connection failed: {why}");
             }
         }
     }
 
     fn handle_msg(&mut self, msg: GameMsg) {
         // An Invite arrives on the pending connection.
-        if let GameMsg::Invite { name, tc_secs, tc_inc } = &msg {
-            if self.pending_conn.is_some() && self.session.is_none() {
-                self.modal = Some(Modal::IncomingInvite { sel: 0 });
-                self.invite_peer = Some(name.clone());
-                self.invite_tc = TimeControl::new(*tc_secs as u64, *tc_inc as u64);
-                return;
-            }
+        if let GameMsg::Invite {
+            name,
+            tc_secs,
+            tc_inc,
+        } = &msg
+            && self.pending_conn.is_some()
+            && self.session.is_none()
+        {
+            self.modal = Some(Modal::IncomingInvite { sel: 0 });
+            self.invite_peer = Some(name.clone());
+            self.invite_tc = TimeControl::new(*tc_secs as u64, *tc_inc as u64);
+            return;
         }
 
         match msg {
@@ -546,7 +575,13 @@ impl App {
                     self.screen = Screen::Lobby;
                 }
             }
-            GameMsg::Start { white_name, black_name, you_are_white, tc_secs, tc_inc } => {
+            GameMsg::Start {
+                white_name,
+                black_name,
+                you_are_white,
+                tc_secs,
+                tc_inc,
+            } => {
                 if self.session.is_none() && self.pending_conn.is_some() {
                     self.conn = self.pending_conn.take();
                     self.modal = None;
@@ -555,19 +590,19 @@ impl App {
                 }
             }
             GameMsg::Move { uci, clock_ms } => {
-                if let Some(sess) = self.session.as_mut() {
-                    if sess.apply_remote_uci(&uci, clock_ms).is_some() {
-                        self.after_move();
-                    }
+                if let Some(sess) = self.session.as_mut()
+                    && sess.apply_remote_uci(&uci, clock_ms).is_some()
+                {
+                    self.after_move();
                 }
             }
             GameMsg::DrawOffer => {
-                if let Some(sess) = self.session.as_mut() {
-                    if !sess.is_over() {
-                        let them = sess.my_color.map(|c| !c).unwrap_or(Color::Black);
-                        sess.offer_draw(them);
-                        self.maybe_open_draw_modal();
-                    }
+                if let Some(sess) = self.session.as_mut()
+                    && !sess.is_over()
+                {
+                    let them = sess.my_color.map(|c| !c).unwrap_or(Color::Black);
+                    sess.offer_draw(them);
+                    self.maybe_open_draw_modal();
                 }
             }
             GameMsg::DrawAccept => {
@@ -603,11 +638,11 @@ impl App {
                         let mut conn = conn;
                         conn.close();
                     }
-                    if let Some(sess) = self.session.as_mut() {
-                        if !sess.is_over() {
-                            let me = sess.my_color.unwrap_or(Color::White);
-                            sess.abandoned(me);
-                        }
+                    if let Some(sess) = self.session.as_mut()
+                        && !sess.is_over()
+                    {
+                        let me = sess.my_color.unwrap_or(Color::White);
+                        sess.abandoned(me);
                     }
                     self.finalize_if_over();
                 }

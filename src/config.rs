@@ -126,7 +126,8 @@ impl Config {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let text = toml::to_string_pretty(self).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let text =
+            toml::to_string_pretty(self).map_err(|e| std::io::Error::other(e.to_string()))?;
         fs::write(&path, text)
     }
 

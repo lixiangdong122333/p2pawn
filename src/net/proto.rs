@@ -64,7 +64,9 @@ pub enum GameMsg {
     /// Peer -> initiator: request accepted.
     Accept,
     /// Peer -> initiator: request declined (optionally with a reason).
-    Decline { reason: String },
+    Decline {
+        reason: String,
+    },
     /// Initiator -> peer: game starts. `you_are_white` is from the receiver's perspective.
     Start {
         white_name: String,
@@ -75,7 +77,10 @@ pub enum GameMsg {
     },
     /// A chess move in UCI form ("e2e4", "e7e8q") plus the mover's remaining
     /// clock time in milliseconds after the move (increment already applied).
-    Move { uci: String, clock_ms: u64 },
+    Move {
+        uci: String,
+        clock_ms: u64,
+    },
     /// Offer a draw.
     DrawOffer,
     DrawAccept,

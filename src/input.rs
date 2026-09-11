@@ -42,14 +42,14 @@ impl App {
             self.toast("draw offers are for LAN games");
             return;
         };
-        if let Some(sess) = self.session.as_mut() {
-            if !sess.is_over() {
-                sess.offer_draw(me);
-                if let Some(conn) = self.conn.as_mut() {
-                    conn.send(&GameMsg::DrawOffer);
-                }
-                self.toast("draw offered");
+        if let Some(sess) = self.session.as_mut()
+            && !sess.is_over()
+        {
+            sess.offer_draw(me);
+            if let Some(conn) = self.conn.as_mut() {
+                conn.send(&GameMsg::DrawOffer);
             }
+            self.toast("draw offered");
         }
     }
 
@@ -88,10 +88,18 @@ fn handle_modal_key(app: &mut App, modal: &Modal, key: KeyEvent) -> bool {
             let (from, to, sel) = (*from, *to, *sel);
             match key.code {
                 KeyCode::Left | KeyCode::Up => {
-                    app.modal = Some(Modal::Promotion { from, to, sel: (sel + 3) % 4 });
+                    app.modal = Some(Modal::Promotion {
+                        from,
+                        to,
+                        sel: (sel + 3) % 4,
+                    });
                 }
                 KeyCode::Right | KeyCode::Down => {
-                    app.modal = Some(Modal::Promotion { from, to, sel: (sel + 1) % 4 });
+                    app.modal = Some(Modal::Promotion {
+                        from,
+                        to,
+                        sel: (sel + 1) % 4,
+                    });
                 }
                 KeyCode::Enter => {
                     app.modal = Some(Modal::Promotion { from, to, sel });
@@ -109,10 +117,14 @@ fn handle_modal_key(app: &mut App, modal: &Modal, key: KeyEvent) -> bool {
             const ITEMS: usize = 4; // Resume, Offer draw, Resign, Leave game
             match key.code {
                 KeyCode::Up => {
-                    app.modal = Some(Modal::GameMenu { sel: (sel + ITEMS - 1) % ITEMS });
+                    app.modal = Some(Modal::GameMenu {
+                        sel: (sel + ITEMS - 1) % ITEMS,
+                    });
                 }
                 KeyCode::Down => {
-                    app.modal = Some(Modal::GameMenu { sel: (sel + 1) % ITEMS });
+                    app.modal = Some(Modal::GameMenu {
+                        sel: (sel + 1) % ITEMS,
+                    });
                 }
                 KeyCode::Esc => app.modal = None,
                 KeyCode::Enter => {
@@ -188,17 +200,14 @@ fn handle_modal_key(app: &mut App, modal: &Modal, key: KeyEvent) -> bool {
             _ => true,
         },
         Modal::InviteWait { peer } => {
-            match key.code {
-                KeyCode::Esc => {
-                    if let Some(conn) = app.conn.as_mut() {
-                        conn.send(&GameMsg::Bye);
-                        conn.close();
-                    }
-                    app.conn = None;
-                    app.modal = None;
-                    let _ = peer;
+            if key.code == KeyCode::Esc {
+                if let Some(conn) = app.conn.as_mut() {
+                    conn.send(&GameMsg::Bye);
+                    conn.close();
                 }
-                _ => {}
+                app.conn = None;
+                app.modal = None;
+                let _ = peer;
             }
             true
         }
@@ -356,7 +365,11 @@ fn handle_setup_key(app: &mut App, key: KeyEvent) {
         KeyCode::Up => app.setup_sel = (app.setup_sel + ROWS - 1) % ROWS,
         KeyCode::Down => app.setup_sel = (app.setup_sel + 1) % ROWS,
         KeyCode::Left | KeyCode::Right => {
-            let dir: i32 = if matches!(key.code, KeyCode::Right) { 1 } else { -1 };
+            let dir: i32 = if matches!(key.code, KeyCode::Right) {
+                1
+            } else {
+                -1
+            };
             match app.setup_sel {
                 0 => {
                     let idx = ColorChoice::ALL
@@ -406,9 +419,11 @@ fn handle_game_key(app: &mut App, key: KeyEvent) {
                 } else {
                     app.attempt_move(cursor);
                 }
-            } else if app.session.as_ref().is_some_and(|s| {
-                s.is_my_turn() && !s.legal_targets(cursor).is_empty()
-            }) {
+            } else if app
+                .session
+                .as_ref()
+                .is_some_and(|s| s.is_my_turn() && !s.legal_targets(cursor).is_empty())
+            {
                 app.selected = Some(cursor);
             }
         }
@@ -441,11 +456,11 @@ fn handle_history_key(app: &mut App, key: KeyEvent) {
         KeyCode::Enter => {
             if let Some(hist) = &app.history {
                 let entries = hist.list();
-                if let Some(e) = entries.get(app.history_sel) {
-                    if let Some(replay) = hist.load(e) {
-                        app.replay = Some(replay);
-                        app.screen = Screen::Replay;
-                    }
+                if let Some(e) = entries.get(app.history_sel)
+                    && let Some(replay) = hist.load(e)
+                {
+                    app.replay = Some(replay);
+                    app.screen = Screen::Replay;
                 }
             }
         }
@@ -469,7 +484,7 @@ fn handle_replay_key(app: &mut App, key: KeyEvent) {
             replay.prev();
         }
         KeyCode::Right | KeyCode::Char(' ') | KeyCode::Enter => {
-            replay.next();
+            replay.advance();
         }
         KeyCode::Home => replay.first(),
         KeyCode::End => replay.last(),
@@ -492,10 +507,8 @@ fn handle_settings_key(app: &mut App, key: KeyEvent) {
             KeyCode::Backspace => {
                 app.config.player_name.pop();
             }
-            KeyCode::Char(c) => {
-                if !c.is_control() && app.config.player_name.chars().count() < 20 {
-                    app.config.player_name.push(c);
-                }
+            KeyCode::Char(c) if !c.is_control() && app.config.player_name.chars().count() < 20 => {
+                app.config.player_name.push(c);
             }
             _ => {}
         }

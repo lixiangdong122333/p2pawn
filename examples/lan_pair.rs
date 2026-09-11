@@ -71,9 +71,7 @@ fn scripted_move(my: Color, plies: usize) -> Option<&'static str> {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (mode, name) = match (args.get(1).map(String::as_str), args.get(2)) {
-        (Some(m @ ("host" | "client" | "client-quit")), Some(n)) => {
-            (m.to_string(), n.clone())
-        }
+        (Some(m @ ("host" | "client" | "client-quit")), Some(n)) => (m.to_string(), n.clone()),
         _ => {
             eprintln!("usage: lan_pair <host|client|client-quit> <name>");
             std::process::exit(2);
@@ -154,13 +152,11 @@ fn main() {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0);
             let move_due = Instant::now() >= next_move_at;
-            if move_due {
-                if let Some(uci) = scripted_move(my, plies) {
-                    app.selected = Some(sq(&uci[..2]));
-                    app.attempt_move(sq(&uci[2..]));
-                    println!("[{name}] played {uci} (ply {})", plies + 1);
-                    next_move_at = Instant::now() + Duration::from_millis(slow_ms);
-                }
+            if move_due && let Some(uci) = scripted_move(my, plies) {
+                app.selected = Some(sq(&uci[..2]));
+                app.attempt_move(sq(&uci[2..]));
+                println!("[{name}] played {uci} (ply {})", plies + 1);
+                next_move_at = Instant::now() + Duration::from_millis(slow_ms);
             }
         }
 
@@ -186,9 +182,7 @@ fn main() {
                 let mut newest: Option<(String, std::path::PathBuf, String)> = None;
                 for e in hist.list() {
                     if let Ok(text) = std::fs::read_to_string(&e.file) {
-                        let better = newest
-                            .as_ref()
-                            .is_none_or(|(k, _, _)| e.stem > *k);
+                        let better = newest.as_ref().is_none_or(|(k, _, _)| e.stem > *k);
                         if better {
                             newest = Some((e.stem.clone(), e.file.clone(), text));
                         }

@@ -6,12 +6,12 @@
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use chess::{Color, Piece, Square};
+use chess::{Color, Square};
 
 use p2pawn::game::session::{Session, TimeControl};
 use p2pawn::net::conn::{Acceptor, GameConnection, LanEvent};
 use p2pawn::net::discovery::Discovery;
-use p2pawn::net::proto::{Beacon, GameMsg, PeerStatus, BEACON_PORT, PROTO_VERSION};
+use p2pawn::net::proto::{BEACON_PORT, Beacon, GameMsg, PROTO_VERSION, PeerStatus};
 
 fn wait_until(timeout: Duration, f: impl Fn() -> bool) -> bool {
     let start = Instant::now();
@@ -32,8 +32,7 @@ fn discovery_finds_peer() {
     let a = Discovery::start("alpha".into(), 40001).unwrap();
     let b = Discovery::start("beta".into(), 40002).unwrap();
     assert!(wait_until(Duration::from_secs(10), || {
-        a.peers().iter().any(|p| p.name == "beta")
-            && b.peers().iter().any(|p| p.name == "alpha")
+        a.peers().iter().any(|p| p.name == "beta") && b.peers().iter().any(|p| p.name == "alpha")
     }));
     // Peer carries the advertised TCP port.
     let beta = a.peers().into_iter().find(|p| p.name == "beta").unwrap();
@@ -48,8 +47,13 @@ fn beacon_roundtrip_via_udp() {
         let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
         s.set_reuse_address(true).unwrap();
         s.set_broadcast(true).unwrap();
-        s.bind(&format!("0.0.0.0:{BEACON_PORT}").parse::<std::net::SocketAddr>().unwrap().into())
-            .unwrap();
+        s.bind(
+            &format!("0.0.0.0:{BEACON_PORT}")
+                .parse::<std::net::SocketAddr>()
+                .unwrap()
+                .into(),
+        )
+        .unwrap();
         s.into()
     };
     let beacon = Beacon {
@@ -120,10 +124,18 @@ fn tcp_full_game_flow() {
     }
 
     // Play a few moves through Sessions over the wire.
-    let mut white =
-        Session::new("alice".into(), "bob".into(), Some(Color::White), TimeControl::BASE_5_0);
-    let mut black =
-        Session::new("alice".into(), "bob".into(), Some(Color::Black), TimeControl::BASE_5_0);
+    let mut white = Session::new(
+        "alice".into(),
+        "bob".into(),
+        Some(Color::White),
+        TimeControl::BASE_5_0,
+    );
+    let mut black = Session::new(
+        "alice".into(),
+        "bob".into(),
+        Some(Color::Black),
+        TimeControl::BASE_5_0,
+    );
 
     let seq = [("e2", "e4"), ("e7", "e5"), ("g1", "f3")];
     for (from, to) in seq {
@@ -177,7 +189,12 @@ fn tcp_full_game_flow() {
 #[test]
 fn remote_game_until_checkmate() {
     // Fool's mate driven entirely through apply_remote_uci.
-    let mut s = Session::new("W".into(), "B".into(), Some(Color::White), TimeControl::BASE_1_0);
+    let mut s = Session::new(
+        "W".into(),
+        "B".into(),
+        Some(Color::White),
+        TimeControl::BASE_1_0,
+    );
     for uci in ["f2f3", "e7e5", "g2g4", "d8h4"] {
         assert!(s.apply_remote_uci(uci, 60_000).is_some(), "move {uci}");
     }
@@ -304,13 +321,12 @@ fn parse(s: &str) -> Square {
 
 #[test]
 fn busy_player_declines_invite() {
-    use p2pawn::app::{App, Screen};
-    use p2pawn::input::handle_key;
     use crossterm::event::{KeyCode, KeyEvent};
+    use p2pawn::app::{App, Screen};
 
     let (tx, rx) = mpsc::channel();
     let busy = App::new().unwrap();
-    let mut busy = busy;
+    let busy = busy;
     // Simulate the busy side: reuse its LanEvent channel by driving a second
     // app that will invite it. The busy app keeps its own acceptor; the
     // invoker connects to it via the lobby flow.
@@ -327,7 +343,8 @@ fn busy_player_declines_invite() {
     let host_port = host.acceptor.local_port;
 
     // Invoker connects directly to the busy host's TCP listener.
-    let mut conn = GameConnection::connect(format!("127.0.0.1:{host_port}").parse().unwrap(), tx).unwrap();
+    let mut conn =
+        GameConnection::connect(format!("127.0.0.1:{host_port}").parse().unwrap(), tx).unwrap();
     conn.send(&GameMsg::Invite {
         name: "invoker".into(),
         tc_secs: 300,

@@ -12,15 +12,18 @@ use super::session::Session;
 /// Generate a complete PGN string for a finished (or ongoing) session.
 pub fn session_to_pgn(session: &Session, started_iso: &str) -> String {
     let mut pgn = String::new();
-    pgn.push_str(&format!("[Event \"p2pawn LAN game\"]\n"));
-    pgn.push_str(&format!("[Site \"LAN\"]\n"));
+    pgn.push_str("[Event \"p2pawn LAN game\"]\n");
+    pgn.push_str("[Site \"LAN\"]\n");
     pgn.push_str(&format!("[Date \"{}\"]\n", iso_to_pgn_date(started_iso)));
     pgn.push_str("[Round \"-\"]\n");
     pgn.push_str(&format!(
         "[White \"{}\"]\n",
         escape_tag(&session.white_name)
     ));
-    pgn.push_str(&format!("[Black \"{}\"]\n", escape_tag(&session.black_name)));
+    pgn.push_str(&format!(
+        "[Black \"{}\"]\n",
+        escape_tag(&session.black_name)
+    ));
     pgn.push_str(&format!("[Result \"{}\"]\n", session.result_string()));
     if let Some(end) = &session.end {
         pgn.push_str(&format!("[Termination \"{}\"]\n", end.termination));
@@ -81,18 +84,18 @@ pub fn parse_pgn(text: &str) -> ParsedPgn {
     for line in text.lines() {
         let line = line.trim();
         if let Some(rest) = line.strip_prefix('[') {
-            if let Some(end) = rest.strip_suffix(']') {
-                if let Some((k, v)) = end.split_once(' ') {
-                    let v = v.trim().trim_matches('"').to_string();
-                    match k.trim() {
-                        "White" => out.white = v,
-                        "Black" => out.black = v,
-                        "Result" => out.result = v,
-                        "Event" => out.event = v,
-                        "Date" => out.date = v,
-                        "Termination" => out.termination = v,
-                        _ => {}
-                    }
+            if let Some(end) = rest.strip_suffix(']')
+                && let Some((k, v)) = end.split_once(' ')
+            {
+                let v = v.trim().trim_matches('"').to_string();
+                match k.trim() {
+                    "White" => out.white = v,
+                    "Black" => out.black = v,
+                    "Result" => out.result = v,
+                    "Event" => out.event = v,
+                    "Date" => out.date = v,
+                    "Termination" => out.termination = v,
+                    _ => {}
                 }
             }
         } else if !line.is_empty() {
@@ -129,7 +132,12 @@ fn tokenize_movetext(text: &str) -> Vec<String> {
         .split_whitespace()
         .filter(|tok| {
             // Drop move numbers ("1.", "1...") and the result marker.
-            if tok.ends_with('.') || *tok == "1-0" || *tok == "0-1" || *tok == "1/2-1/2" || *tok == "*" {
+            if tok.ends_with('.')
+                || *tok == "1-0"
+                || *tok == "0-1"
+                || *tok == "1/2-1/2"
+                || *tok == "*"
+            {
                 return false;
             }
             if tok.starts_with('$') {
@@ -164,6 +172,12 @@ impl Replay {
         self.sans.len()
     }
 
+    /// Present because clippy requires `is_empty` alongside a public `len`.
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.sans.is_empty()
+    }
+
     pub fn board(&self) -> &Board {
         &self.board
     }
@@ -178,7 +192,7 @@ impl Replay {
     }
 
     /// Apply the next move. Returns false at the end.
-    pub fn next(&mut self) -> bool {
+    pub fn advance(&mut self) -> bool {
         if self.at_end() {
             return false;
         }
@@ -199,7 +213,7 @@ impl Replay {
         self.board = Board::default();
         self.idx = 0;
         for _ in 0..n {
-            if !self.next() {
+            if !self.advance() {
                 break;
             }
         }
@@ -228,7 +242,10 @@ fn escape_tag(s: &str) -> String {
 
 fn iso_to_pgn_date(iso: &str) -> String {
     // "2026-09-10T15:04:05" -> "2026.09.10"
-    iso.split('T').next().unwrap_or("????.??.??").replace('-', ".")
+    iso.split('T')
+        .next()
+        .unwrap_or("????.??.??")
+        .replace('-', ".")
 }
 
 fn tc_to_pgn(base_secs: u64, inc_secs: u64) -> String {
@@ -264,17 +281,20 @@ mod tests {
         assert_eq!(pgn.sans, vec!["f3", "e5", "g4", "Qh4#"]);
 
         let mut r = Replay::new(pgn.sans.clone());
-        assert!(r.next());
-        assert!(r.next());
-        assert!(r.next());
-        assert!(r.next());
-        assert!(!r.next());
+        assert!(r.advance());
+        assert!(r.advance());
+        assert!(r.advance());
+        assert!(r.advance());
+        assert!(!r.advance());
         assert_eq!(r.board().status(), chess::BoardStatus::Checkmate);
         // Compare the piece placement and side to move; the chess crate's
         // halfmove/fullmove counters in Board's FEN are not game-aware.
         let fen = r.board().to_string();
         let fields: Vec<&str> = fen.split(' ').collect();
-        assert_eq!(fields[..3].join(" "), "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq");
+        assert_eq!(
+            fields[..3].join(" "),
+            "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq"
+        );
         assert!(r.prev());
         assert!(r.prev());
         r.first();
@@ -285,8 +305,8 @@ mod tests {
 
     #[test]
     fn generated_pgn_roundtrip() {
-        use chess::{ChessMove, Square};
         use crate::game::session::{Session, TimeControl};
+        use chess::{ChessMove, Square};
 
         let mut s = Session::new("Alice".into(), "Bob".into(), None, TimeControl::BASE_3_2);
         let mv = ChessMove::new(Square::E2, Square::E4, None);
@@ -300,11 +320,14 @@ mod tests {
         let parsed = parse_pgn(&pgn);
         assert_eq!(parsed.sans, vec!["e4"]);
         let mut r = Replay::new(parsed.sans);
-        assert!(r.next());
+        assert!(r.advance());
         let fen = r.board().to_string();
         let fields: Vec<&str> = fen.split(' ').collect();
         // Placement + side to move + castling rights (en-passant and move
         // counters in the chess crate's Board FEN are not game-aware).
-        assert_eq!(fields[..3].join(" "), "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq");
+        assert_eq!(
+            fields[..3].join(" "),
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq"
+        );
     }
 }

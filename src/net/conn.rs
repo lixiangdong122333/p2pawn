@@ -7,8 +7,8 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -75,10 +75,10 @@ impl GameConnection {
                         return;
                     }
                     Ok(_) => {
-                        if let Ok(msg) = serde_json::from_str::<GameMsg>(line.trim()) {
-                            if tx.send(LanEvent::Msg(msg)).is_err() {
-                                return;
-                            }
+                        if let Ok(msg) = serde_json::from_str::<GameMsg>(line.trim())
+                            && tx.send(LanEvent::Msg(msg)).is_err()
+                        {
+                            return;
                         }
                     }
                     Err(e) => {
@@ -102,10 +102,7 @@ impl GameConnection {
     ///
     /// `connect_timeout` leaves the stream in non-blocking mode on some
     /// platforms; switch it back to blocking before use.
-    pub fn connect(
-        addr: SocketAddr,
-        events: Sender<LanEvent>,
-    ) -> std::io::Result<GameConnection> {
+    pub fn connect(addr: SocketAddr, events: Sender<LanEvent>) -> std::io::Result<GameConnection> {
         let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3))?;
         stream.set_nonblocking(false)?;
         GameConnection::spawn(stream, events)
@@ -113,13 +110,13 @@ impl GameConnection {
 
     /// Send one message (NDJSON). Errors are surfaced as disconnect events.
     pub fn send(&mut self, msg: &GameMsg) {
-        if let Ok(s) = serde_json::to_string(msg) {
-            if let Err(e) = self.writer.write_all(s.as_bytes()).and_then(|_| {
+        if let Ok(s) = serde_json::to_string(msg)
+            && let Err(e) = self.writer.write_all(s.as_bytes()).and_then(|_| {
                 self.writer.write_all(b"\n")?;
                 self.writer.flush()
-            }) {
-                let _ = self.events.send(LanEvent::Disconnected(e.to_string()));
-            }
+            })
+        {
+            let _ = self.events.send(LanEvent::Disconnected(e.to_string()));
         }
     }
 
@@ -154,25 +151,27 @@ impl Acceptor {
         listener
             .set_nonblocking(true)
             .expect("set_nonblocking on fresh listener");
-        let handle = thread::spawn(move || loop {
-            if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                return;
-            }
-            match listener.accept() {
-                Ok((stream, _)) => {
-                    // Hand the unstarted connection to the app: it starts the
-                    // reader, guaranteeing `Incoming` is seen before any `Msg`
-                    // from this connection.
-                    if let Ok(conn) = GameConnection::new_unstarted(stream, events.clone()) {
-                        if events.send(LanEvent::Incoming(conn)).is_err() {
+        let handle = thread::spawn(move || {
+            loop {
+                if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        // Hand the unstarted connection to the app: it starts the
+                        // reader, guaranteeing `Incoming` is seen before any `Msg`
+                        // from this connection.
+                        if let Ok(conn) = GameConnection::new_unstarted(stream, events.clone())
+                            && events.send(LanEvent::Incoming(conn)).is_err()
+                        {
                             return;
                         }
                     }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(100));
+                    }
+                    Err(_) => return,
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(100));
-                }
-                Err(_) => return,
             }
         });
         Ok(Acceptor {
@@ -185,7 +184,8 @@ impl Acceptor {
 
 impl Drop for Acceptor {
     fn drop(&mut self) {
-        self.shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.shutdown
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(h) = self.handle.take() {
             let _ = h.join();
         }

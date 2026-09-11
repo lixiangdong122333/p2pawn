@@ -1,0 +1,181 @@
+# Release: when a PR is squash-merged into main, derive the next version from
+# the merge commit's conventional-commit type, update Cargo.toml/CHANGELOG,
+# create the tag server-side, build all three platforms, and publish the
+# GitHub Release -- all in one run (no nested-workflow triggering involved).
+
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.versions.outputs.released }}
+      version: ${{ steps.versions.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for git-cliff
+          # The bot commit below must be allowed to push to protected main.
+          token: ${{ secrets.RELEASE_BOT_TOKEN }}
+
+      - name: Install git-cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --verbose
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Compute next version
+        id: versions
+        run: |
+          set -euo pipefail
+          # Last tag, or 0.0.0 if none exists yet.
+          LAST_TAG="$(git tag --sort=-v:refname | head -1 || true)"
+          LAST="${LAST_TAG#v}"
+          [ -n "$LAST" ] || LAST=0.0.0
+
+          # The head commit is the squash-merge; its subject carries the PR's
+          # conventional-commit title, e.g. "feat: add replay (#12)".
+          SUBJECT="$(git log -1 --pretty=%s)"
+
+          # Breaking marker: "feat!:" anywhere in the type part, or a
+          # "BREAKING CHANGE:" footer in the body.
+          if echo "$SUBJECT" | grep -qE '^[a-z]+([^)]*\)!?:'; then
+            BUMP=minor   # breaking on 0.x bumps minor
+          elif git log -1 --pretty=%B | grep -q '^BREAKING CHANGE:'; then
+            BUMP=minor
+          elif echo "$SUBJECT" | grep -qE '^feat([(:]|$)'; then
+            BUMP=minor
+          elif echo "$SUBJECT" | grep -qE '^fix([(:]|$)'; then
+            BUMP=patch
+          elif git-cliff --config cliff.toml --unreleased --strip all | grep -q '[^[:space:]]'; then
+            # chore/docs/etc with a non-empty changelog body: still worth a
+            # patch release.
+            BUMP=patch
+          else
+            echo "No release-worthy changes, skipping."
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST"
+          if [ "$BUMP" = minor ]; then
+            MINOR=$((MINOR+1)); PATCH=0
+          else
+            PATCH=$((PATCH+1))
+          fi
+          VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "released=true" >> "$GITHUB_OUTPUT"
+          echo "Next version: v$VERSION (bump=$BUMP, from: $SUBJECT)"
+
+      - name: Update version in Cargo.toml / Cargo.lock
+        if: steps.versions.outputs.released == 'true'
+        run: |
+          VERSION="${{ steps.versions.outputs.version }}"
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          cargo update --workspace --offline 2>/dev/null || true
+          # Generate the changelog for this release into CHANGELOG.md.
+          git-cliff --config cliff.toml --tag "v$VERSION" > /tmp/changelog.md
+          cp /tmp/changelog.md CHANGELOG.md
+
+      - name: Commit release files
+        if: steps.versions.outputs.released == 'true'
+        run: |
+          VERSION="${{ steps.versions.outputs.version }}"
+          git config user.name "p2pawn-release-bot"
+          git config user.email "13478917542@163.com"
+          git add Cargo.toml Cargo.lock CHANGELOG.md
+          git commit -m "chore(release): v$VERSION" || exit 1
+          git push
+
+      - name: Create GitHub Release (tag on the merge commit)
+        if: steps.versions.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          VERSION: ${{ steps.versions.outputs.version }}
+          TARGET: ${{ github.sha }}
+        run: |
+          # Release notes: the changelog section generated for this version.
+          NOTES="$(git-cliff --config cliff.toml --tag "v$VERSION" --strip header | sed '/^$/d;1!b')"
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET" \
+            --title "v$VERSION" \
+            --notes "$NOTES" \
+            --draft
+
+  build:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: p2pawn-x86_64-windows.zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact: p2pawn-x86_64-linux-musl.tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: p2pawn-aarch64-macos.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install musl tools (Linux)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          SRC="target/${{ matrix.target }}/release/p2pawn"
+          [ -f "$SRC.exe" ] && SRC="$SRC.exe"
+          mkdir -p "dist/p2pawn-v$VERSION"
+          cp "$SRC" "dist/p2pawn-v$VERSION/"
+          cp README.md README.zh-CN.md LICENSE-MIT LICENSE-APACHE "dist/p2pawn-v$VERSION/"
+          cd dist
+          if [[ "${{ matrix.artifact }}" == *.zip ]]; then
+            7z a "../${{ matrix.artifact }}" "p2pawn-v$VERSION"
+          else
+            tar czf "../${{ matrix.artifact }}" "p2pawn-v$VERSION"
+          fi
+          cd ..
+          sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: gh release upload "v$VERSION" "${{ matrix.artifact }}" "${{ matrix.artifact }}.sha256" --repo "$GITHUB_REPOSITORY"
+
+  publish:
+    needs: [release, build]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the draft release as published
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: gh release edit "v$VERSION" --draft=false --latest --repo "$GITHUB_REPOSITORY"
