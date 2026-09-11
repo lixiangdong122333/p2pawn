@@ -37,7 +37,7 @@ The squash-merge turns your PR title into the single commit subject on
 | `feat:` | **minor** | `feat: add LAN chat` → v0.2.0 |
 | `fix:` | **patch** | `fix: clock drift` → v0.2.1 |
 | `feat!:` or `BREAKING CHANGE:` in the description | **minor** (major after 1.0) | `feat!:` new protocol |
-| `chore:`, `docs:`, `ci:`, `refactor:`, `test:` | patch, **only if user-visible**; otherwise no release | `docs: typo` → no release |
+| `chore:`, `docs:`, `ci:`, `refactor:`, `test:` | **patch**, whenever the change shows up in the changelog (user-visible docs, dependency bumps); truly invisible maintenance (CI tweaks, internal refactors the changelog parsers skip) releases nothing | `docs: typo` → likely v0.2.1 |
 
 Rules of thumb:
 
@@ -45,9 +45,10 @@ Rules of thumb:
   `fix`, `chore`, `docs`, `refactor`, `test`, `ci`. CI rejects anything
   else (checked by `amannn/action-semantic-pull-request`).
 - Scope syntax is fine: `feat(replay): ...`.
-- Pure maintenance changes that users never see (`ci:`, internal
-  refactors) are intentionally skipped by the releaser — don't be
-  surprised when merging them produces no new version.
+- Maintenance changes are released as **patch** versions when they land in
+  the changelog (docs, dependency updates); changes the changelog omits
+  (CI tweaks the parsers skip) trigger no release. When in doubt, assume
+  a merge produces a patch release.
 
 ## What CI checks (and what it means for you)
 

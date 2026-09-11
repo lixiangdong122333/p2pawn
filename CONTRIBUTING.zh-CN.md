@@ -35,7 +35,7 @@ squash 合并会把你的 PR 标题变成 `main` 上唯一的提交主题，发�
 | `feat:` | **minor** | `feat: add LAN chat` → v0.2.0 |
 | `fix:` | **patch** | `fix: clock drift` → v0.2.1 |
 | `feat!:` 或描述里写 `BREAKING CHANGE:` | **minor**（1.0 后为 major） | `feat!:` 新协议 |
-| `chore:`、`docs:`、`ci:`、`refactor:`、`test:` | patch，**仅当用户可见**；否则不发版 | `docs: typo` → 不发版 |
+| `chore:`、`docs:`、`ci:`、`refactor:`、`test:` | **patch**，只要该变更会出现在 changelog 里（用户可见的文档、依赖升级）；changelog 略过的纯内部维护（CI 调整等）不发版 | `docs: typo` → 通常 v0.2.1 |
 
 经验法则：
 
@@ -43,8 +43,9 @@ squash 合并会把你的 PR 标题变成 `main` 上唯一的提交主题，发�
   `chore`、`docs`、`refactor`、`test`、`ci`。不符合的 PR 会被 CI
   直接拒掉（`amannn/action-semantic-pull-request` 检查）。
 - 带作用域的写法没问题：`feat(replay): ...`。
-- 纯维护性变更（`ci:`、内部重构）会被发布器有意跳过 —— 合并它们
-  没有产生新版本是正常现象，不要惊讶。
+- 维护性变更只要进入 changelog（文档、依赖更新）就会以 **patch** 版本
+  发布；changelog 略过的变更（解析器跳过的 CI 调整等）不触发发版。
+  拿不准时，假设合并会产生一个 patch 版本。
 
 ## CI 检查什么（对你意味着什么）
 
