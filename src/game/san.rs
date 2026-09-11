@@ -13,7 +13,12 @@ pub fn san(board: &Board, mv: ChessMove) -> String {
 
     let mut out = String::new();
 
-    if piece == Piece::King && src.get_file().to_index().abs_diff(dest.get_file().to_index()) == 2
+    if piece == Piece::King
+        && src
+            .get_file()
+            .to_index()
+            .abs_diff(dest.get_file().to_index())
+            == 2
     {
         // Castling.
         out.push_str(if dest.get_file().to_index() > src.get_file().to_index() {
@@ -156,12 +161,8 @@ fn disambiguation(board: &Board, mv: ChessMove) -> Option<String> {
         return None;
     }
 
-    let same_file = rivals
-        .iter()
-        .any(|s| s.get_file() == src.get_file());
-    let same_rank = rivals
-        .iter()
-        .any(|s| s.get_rank() == src.get_rank());
+    let same_file = rivals.iter().any(|s| s.get_file() == src.get_file());
+    let same_rank = rivals.iter().any(|s| s.get_rank() == src.get_rank());
     if !same_file {
         Some(file_char(src.get_file()).to_string())
     } else if !same_rank {
@@ -209,7 +210,8 @@ mod tests {
     #[test]
     fn disambiguation_two_knights() {
         // Knights on b1 and f3 can both reach d2 (d2 pawn removed).
-        let b = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/5N2/PPP1PPPP/RNBQKB1R w KQkq - 0 1".into())
+        let b = "rnbqkbnr/pppppppp/8/8/8/5N2/PPP1PPPP/RNBQKB1R w KQkq - 0 1"
+            .parse::<Board>()
             .unwrap();
         let s = san_of_first(&b, |m| {
             m.get_source() == Square::B1
@@ -226,11 +228,13 @@ mod tests {
     #[test]
     fn mate_suffix() {
         // Fool's mate final position.
-        let b = Board::from_fen("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 0 3".into())
+        let b = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 0 3"
+            .parse::<Board>()
             .unwrap();
         assert_eq!(b.status(), chess::BoardStatus::Checkmate);
         // The mating move Qh4# was played on the previous board:
-        let prev = Board::from_fen("rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq g3 0 2".into())
+        let prev = "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq g3 0 2"
+            .parse::<Board>()
             .unwrap();
         let s = san_of_first(&prev, |m| {
             m.get_dest() == Square::make_square(chess::Rank::Fourth, chess::File::H)
@@ -240,7 +244,9 @@ mod tests {
 
     #[test]
     fn castling_san() {
-        let b = Board::from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1".into()).unwrap();
+        let b = "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1"
+            .parse::<Board>()
+            .unwrap();
         // Filter by king's source so the rook move (Rg1) doesn't match first.
         let s = san_of_first(&b, |m| {
             m.get_source() == Square::E1
@@ -256,7 +262,7 @@ mod tests {
 
     #[test]
     fn promotion_san() {
-        let b = Board::from_fen("8/P6k/8/8/8/8/8/K7 w - - 0 1".into()).unwrap();
+        let b = "8/P6k/8/8/8/8/8/K7 w - - 0 1".parse::<Board>().unwrap();
         let s = san_of_first(&b, |m| {
             m.get_dest() == Square::make_square(chess::Rank::Eighth, chess::File::A)
                 && m.get_promotion() == Some(Piece::Queen)
@@ -266,7 +272,8 @@ mod tests {
 
     #[test]
     fn en_passant_san() {
-        let b = Board::from_fen("rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3".into())
+        let b = "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3"
+            .parse::<Board>()
             .unwrap();
         let s = san_of_first(&b, |m| {
             m.get_dest() == Square::make_square(chess::Rank::Sixth, chess::File::F)

@@ -1,13 +1,13 @@
 //! All rendering: screens, board, modals. Pure functions of `App` state.
 
 use chess::{Board, Color, Piece, Square};
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color as C, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, List, ListItem, ListState, Paragraph, Wrap};
-use ratatui::Frame;
 
-use crate::app::{App, Modal, Screen, MENU_ITEMS};
+use crate::app::{App, MENU_ITEMS, Modal, Screen};
 use crate::config::{HintStyle, PieceStyle};
 use crate::game::session::{Outcome, Session, TimeControl};
 use crate::net::proto::PeerStatus;
@@ -212,7 +212,9 @@ fn draw_setup(f: &mut Frame, app: &App) {
 // Game screen
 
 fn draw_game(f: &mut Frame, app: &App) {
-    let Some(sess) = app.session.as_ref() else { return };
+    let Some(sess) = app.session.as_ref() else {
+        return;
+    };
     let area = f.area();
 
     let cols = Layout::horizontal([Constraint::Min(21), Constraint::Min(28)]).split(area);
@@ -298,9 +300,19 @@ fn render_player_bar(f: &mut Frame, area: Rect, sess: &Session, color: Color) {
 fn fmt_clock(d: std::time::Duration) -> String {
     let secs = d.as_secs();
     if secs >= 3600 {
-        format!("{:2}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60)
+        format!(
+            "{:2}:{:02}:{:02}",
+            secs / 3600,
+            (secs % 3600) / 60,
+            secs % 60
+        )
     } else {
-        format!("{:2}:{:02}.{}", secs / 60, secs % 60, d.subsec_millis() / 100)
+        format!(
+            "{:2}:{:02}.{}",
+            secs / 60,
+            secs % 60,
+            d.subsec_millis() / 100
+        )
     }
 }
 
@@ -308,7 +320,13 @@ fn fmt_clock(d: std::time::Duration) -> String {
 fn captured_string(board: &Board, by_color: Color) -> String {
     let opponent = !by_color;
     let mut out = String::new();
-    for piece in [Piece::Queen, Piece::Rook, Piece::Bishop, Piece::Knight, Piece::Pawn] {
+    for piece in [
+        Piece::Queen,
+        Piece::Rook,
+        Piece::Bishop,
+        Piece::Knight,
+        Piece::Pawn,
+    ] {
         let have = (*board.pieces(piece) & *board.color_combined(opponent)).popcnt();
         let full = if piece == Piece::Pawn { 8 } else { 2 };
         for _ in have..full {
@@ -371,13 +389,15 @@ fn render_board(f: &mut Frame, area: Rect, app: &App, session: Option<&Session>,
         ),
         None => (Vec::new(), None, None),
     };
-    let cursor = session.and_then(|_| app.cursor);
+    let cursor = session.and(app.cursor);
 
     let grid_w: u16 = 16;
     let grid_h: u16 = 8;
     let left_pad: u16 = if show_coords { 2 } else { 0 };
 
-    let free_w = area.width.saturating_sub(left_pad + if show_coords { 1 } else { 0 });
+    let free_w = area
+        .width
+        .saturating_sub(left_pad + if show_coords { 1 } else { 0 });
     let free_h = area.height.saturating_sub(if show_coords { 1 } else { 0 });
     let grid = Rect {
         x: area.x + left_pad + free_w.saturating_sub(grid_w) / 2,
@@ -409,10 +429,10 @@ fn render_board(f: &mut Frame, area: Rect, app: &App, session: Option<&Session>,
             if Some(sq) == cursor {
                 bg = CURSOR_BG;
             }
-            if let Some((from, to)) = last_move {
-                if sq == from || sq == to {
-                    bg = SEL_BG;
-                }
+            if let Some((from, to)) = last_move
+                && (sq == from || sq == to)
+            {
+                bg = SEL_BG;
             }
             if Some(sq) == check_sq {
                 bg = CHECK_BG;
@@ -456,10 +476,7 @@ fn render_board(f: &mut Frame, area: Rect, app: &App, session: Option<&Session>,
             let file_idx = if flip { 7 - vf } else { vf };
             let letter = (b'a' + file_idx as u8) as char;
             f.render_widget(
-                Paragraph::new(Span::styled(
-                    format!("{letter} "),
-                    Style::new().fg(DIM),
-                )),
+                Paragraph::new(Span::styled(format!("{letter} "), Style::new().fg(DIM))),
                 Rect {
                     x: grid.x + (vf as u16) * 2,
                     y: grid.y + grid_h,
@@ -653,9 +670,7 @@ fn draw_replay(f: &mut Frame, app: &App) {
         board_rows[3],
     );
 
-    let sans: Vec<&str> = (0..replay.len())
-        .filter_map(|i| replay.san_at(i))
-        .collect();
+    let sans: Vec<&str> = (0..replay.len()).filter_map(|i| replay.san_at(i)).collect();
     render_movelist(f, cols[1], &sans, replay.idx);
 }
 
@@ -679,7 +694,11 @@ fn draw_settings(f: &mut Frame, app: &App) {
 
     let name_row = Line::from(vec![
         Span::styled(
-            if editing { "▏ Player name  " } else { "  Player name  " },
+            if editing {
+                "▏ Player name  "
+            } else {
+                "  Player name  "
+            },
             s(0),
         ),
         Span::styled(
@@ -688,22 +707,27 @@ fn draw_settings(f: &mut Frame, app: &App) {
                 app.config.player_name,
                 if editing { "▏" } else { "" }
             ),
-            if editing { Style::new().fg(ACCENT) } else { s(0) },
+            if editing {
+                Style::new().fg(ACCENT)
+            } else {
+                s(0)
+            },
         ),
     ]);
     let piece_row = Line::from(vec![
         Span::styled("  Piece style  ", s(1)),
-        Span::styled(
-            format!("◂ {} ▸", app.config.piece_style.label()),
-            s(1),
-        ),
+        Span::styled(format!("◂ {} ▸", app.config.piece_style.label()), s(1)),
     ]);
     let coord_row = Line::from(vec![
         Span::styled("  Coordinates  ", s(2)),
         Span::styled(
             format!(
                 "◂ {} ▸",
-                if app.config.show_coordinates { "on" } else { "off" }
+                if app.config.show_coordinates {
+                    "on"
+                } else {
+                    "off"
+                }
             ),
             s(2),
         ),
@@ -729,10 +753,7 @@ fn draw_settings(f: &mut Frame, app: &App) {
     let flip_row = Line::from(vec![
         Span::styled("  Flip board   ", s(5)),
         Span::styled(
-            format!(
-                "◂ {} ▸",
-                if app.config.flip_board { "on" } else { "off" }
-            ),
+            format!("◂ {} ▸", if app.config.flip_board { "on" } else { "off" }),
             s(5),
         ),
     ]);
@@ -835,7 +856,9 @@ fn draw_modal(f: &mut Frame, app: &App, modal: &Modal) {
             f.render_widget(Paragraph::new(lines), inner);
         }
         Modal::GameOver => {
-            let Some(sess) = app.session.as_ref() else { return };
+            let Some(sess) = app.session.as_ref() else {
+                return;
+            };
             let Some(end) = sess.end.as_ref() else { return };
             let inner = popup(f, "Game over", 46, 7);
             let headline = match end.outcome {
@@ -861,7 +884,9 @@ fn draw_modal(f: &mut Frame, app: &App, modal: &Modal) {
         Modal::DrawIncoming => {
             let inner = popup(f, "Draw offered", 46, 6);
             let text = vec![
-                Line::from("Your opponent offers a draw.").fg(C::Gray).centered(),
+                Line::from("Your opponent offers a draw.")
+                    .fg(C::Gray)
+                    .centered(),
                 Line::from(""),
                 Line::from(vec![
                     choice_span(0, 0, "Accept"),
@@ -877,10 +902,7 @@ fn draw_modal(f: &mut Frame, app: &App, modal: &Modal) {
             let peer = app.invite_peer.clone().unwrap_or_default();
             let text = vec![
                 Line::from(Span::styled(
-                    format!(
-                        "{peer} invites you to a game ({})",
-                        app.invite_tc.label()
-                    ),
+                    format!("{peer} invites you to a game ({})", app.invite_tc.label()),
                     Style::new().fg(C::Gray),
                 ))
                 .centered(),
@@ -931,22 +953,26 @@ fn draw_modal(f: &mut Frame, app: &App, modal: &Modal) {
         }
         Modal::QuitConfirm { sel } => {
             let inner = popup(f, "Quit?", 36, 5);
-            let text = vec![Line::from(vec![
-                choice_span(*sel, 0, "Quit"),
-                Span::raw("  "),
-                choice_span(*sel, 1, "Cancel"),
-            ])
-            .centered()];
+            let text = vec![
+                Line::from(vec![
+                    choice_span(*sel, 0, "Quit"),
+                    Span::raw("  "),
+                    choice_span(*sel, 1, "Cancel"),
+                ])
+                .centered(),
+            ];
             f.render_widget(Paragraph::new(text), inner);
         }
         Modal::DeleteConfirm { sel } => {
             let inner = popup(f, "Delete game?", 42, 6);
-            let text = vec![Line::from(vec![
-                choice_span(*sel, 0, "Delete"),
-                Span::raw("  "),
-                choice_span(*sel, 1, "Cancel"),
-            ])
-            .centered()];
+            let text = vec![
+                Line::from(vec![
+                    choice_span(*sel, 0, "Delete"),
+                    Span::raw("  "),
+                    choice_span(*sel, 1, "Cancel"),
+                ])
+                .centered(),
+            ];
             f.render_widget(Paragraph::new(text), inner);
         }
     }

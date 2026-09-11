@@ -34,22 +34,20 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
             break;
         }
         // Poll for input with a 100ms timeout so the clocks stay fresh.
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    input::handle_key(&mut app, key);
-                }
-            }
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            input::handle_key(&mut app, key);
         }
     }
 
     // Politely close any running LAN game.
-    if let Some(sess) = app.session.as_ref() {
-        if !sess.is_over() {
-            if let Some(conn) = app.conn.as_mut() {
-                conn.send(&net::proto::GameMsg::Bye);
-            }
-        }
+    if let Some(sess) = app.session.as_ref()
+        && !sess.is_over()
+        && let Some(conn) = app.conn.as_mut()
+    {
+        conn.send(&net::proto::GameMsg::Bye);
     }
     Ok(())
 }

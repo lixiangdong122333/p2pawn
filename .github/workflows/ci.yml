@@ -1,0 +1,72 @@
+# CI: run on every PR and on feature branches.
+# Keeps the quality bar for merging: formatted, warning-free, all tests green,
+# and dependency licenses stay permissive.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: fmt + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    name: test (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - profile: debug
+          - profile: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --profile ${{ matrix.profile == 'release' && 'release' || 'dev' }}
+
+  licenses:
+    name: license check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Deny copyleft or unknown licenses in the dependency tree.
+      # cargo-deny is best installed via its prebuilt tarball (the crate is
+      # slow to build from source); let's use the official action.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --all-features check licenses
+
+  pr-title:
+    name: PR title follows conventional commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Required for version bumping in release.yml; keep in sync there.
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            ci
