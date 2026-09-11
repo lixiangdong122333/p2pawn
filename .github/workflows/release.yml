@@ -193,4 +193,8 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
         # Matrix jobs upload concurrently; --clobber lets a retry overwrite
         # an asset that another job (or a previous attempt) already created.
+        # shell: bash is required on windows-latest, whose default shell is
+        # PowerShell — it would not expand "$VERSION" in the double-quoted
+        # argument and gh would look for a release literally named 'v$VERSION'.
+        shell: bash
         run: gh release upload "v$VERSION" "${{ matrix.artifact }}" "${{ matrix.artifact }}.sha256" --clobber --repo "$GITHUB_REPOSITORY"
