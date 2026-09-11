@@ -45,12 +45,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Deny copyleft or unknown licenses in the dependency tree.
-      # cargo-deny is best installed via its prebuilt tarball (the crate is
-      # slow to build from source); let's use the official action.
+      # Deny copyleft or unknown licenses in the dependency tree, using the
+      # prebuilt container image of cargo-deny (fast; no source build).
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          arguments: --all-features check licenses
+          arguments: --all-features
+          command-arguments: licenses
 
   pr-title:
     name: PR title follows conventional commits
