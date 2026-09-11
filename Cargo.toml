@@ -1,6 +1,6 @@
 [package]
 name = "p2pawn"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 description = "Peer-to-peer chess in your terminal — no server, no account, just you and a colleague on the LAN."
 license = "MIT OR Apache-2.0"
