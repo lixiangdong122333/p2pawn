@@ -160,6 +160,16 @@ refused).
 the player name without editing the config — handy for running two
 instances on one machine.
 
+## Contributing
+
+PRs are welcome! `main` accepts squash-merged pull requests only, and PR
+titles follow [Conventional Commits](https://www.conventionalcommits.org) —
+the title prefix (`feat:`/`fix:`/...) drives the automatic version bump.
+CI enforces fmt, clippy, tests, and dependency licenses.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide
+([简体中文](CONTRIBUTING.zh-CN.md)).
+
 ## License
 
 Copyright 2026 Xiangdong Li
